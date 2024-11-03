@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { MessageSquare, Code2, Clock, GitPullRequest, Github } from 'lucide-react';
+import { MessageSquare, Code2, Clock, GitPullRequest, Github, Users } from 'lucide-react';
 
 const GITHUB_CLIENT_ID = 'Ov23li78WLoahHs6bmLU'; // Replace with your client ID
 const BACKEND_URL = 'http://localhost:3000';
@@ -30,8 +30,9 @@ function App() {
     if (token) {
       setIsLoggedIn(true);
       fetchAllData(token);
+    } else {
+      setLoading(false);
     }
-    setLoading(false);
 
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
@@ -62,16 +63,38 @@ function App() {
 
       // Fetch Copilot data
       const username = userData.login;
-      const copilotResponse = await fetch(`${BACKEND_URL}/api/github/copilot/user/${username}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      const copilotData = await copilotResponse.json();
-      setCopilotData(copilotData);
+      if (username) {
+        const copilotResponse = await fetch(`${BACKEND_URL}/api/github/copilot/user/${username}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        const copilotData = await copilotResponse.json();
+        setCopilotData(copilotData);
+      } else {
+        console.error('Username is undefined');
+      }
+
+      // Fetch organization members' usage data
+      if (orgData.length > 0) {
+        const orgMembersResponse = await fetch(`${BACKEND_URL}/api/github/copilot/org/${orgData[0].login}/members`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        const orgMembersData = await orgMembersResponse.json();
+        setOrgData((prevOrgData) => ({
+          ...prevOrgData,
+          memberUsage: orgMembersData,
+        }));
+      } else {
+        console.error('Organization login is undefined');
+      }
 
     } catch (error) {
       console.error('Error fetching data:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -245,6 +268,100 @@ function App() {
               </div>
             </div>
           )}
+        </>
+      )}
+
+      {orgData && (
+        <>
+          <h2 className="text-2xl font-bold mb-6">Organization Copilot Usage</h2>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            <div className="bg-white p-6 rounded-lg shadow">
+              <h3 className="text-lg font-semibold mb-2">Active Seats</h3>
+              <div className="text-3xl font-bold">{orgData.seats?.total_seats || 'N/A'}</div>
+              <p className="text-sm text-gray-500">Used: {orgData.seats?.used_seats || 'N/A'}</p>
+            </div>
+            
+            <div className="bg-white p-6 rounded-lg shadow">
+              <h3 className="text-lg font-semibold mb-2">Total Usage</h3>
+              <div className="text-3xl font-bold">
+                {orgData.organizationUsage?.total_suggestions || 'N/A'} suggestions
+              </div>
+              <p className="text-sm text-gray-500">
+                Acceptance rate: {orgData.organizationUsage?.acceptance_rate || 'N/A'}%
+              </p>
+            </div>
+            
+            <div className="bg-white p-6 rounded-lg shadow">
+              <h3 className="text-lg font-semibold mb-2">Active Users</h3>
+              <div className="text-3xl font-bold">
+                {orgData.memberUsage?.filter(m => m.usage).length || 'N/A'}
+              </div>
+              <p className="text-sm text-gray-500">
+                Total members: {orgData.memberUsage?.length || 'N/A'}
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            <table className="min-w-full">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    User
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Suggestions
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Acceptance Rate
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Lines Saved
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Last Active
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {orgData.memberUsage?.map((member, index) => (
+                  <tr key={index}>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <img 
+                          className="h-8 w-8 rounded-full" 
+                          src={member.user.avatar_url} 
+                          alt="" 
+                        />
+                        <div className="ml-4">
+                          <div className="text-sm font-medium text-gray-900">
+                            {member.user.login}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {member.usage?.total_suggestions || 'N/A'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {member.usage?.acceptance_rate ? 
+                        `${member.usage.acceptance_rate}%` : 
+                        'N/A'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {member.usage?.lines_saved || 'N/A'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {member.usage?.last_active ? 
+                        new Date(member.usage.last_active).toLocaleDateString() : 
+                        'N/A'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
     </div>

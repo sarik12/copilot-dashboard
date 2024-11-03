@@ -124,41 +124,33 @@ app.get("/api/github/copilot/user/:username", async (req, res) => {
     return res.status(401).json({ error: "No token provided" });
   }
 
-  try {
-    // Try to fetch real Copilot data
-    try {
-      const data = await githubRequest(
-        `https://api.github.com/users/${username}/copilot/usage`,
-        token
-      );
-      res.json(data);
-    } catch (error) {
-      // If real data fails, return mock data
-      console.log("Falling back to mock Copilot data");
-      const mockData = {
-        total_suggestions: Math.floor(Math.random() * 1000) + 500,
-        acceptance_rate: Math.floor(Math.random() * 20) + 70,
-        lines_saved: Math.floor(Math.random() * 5000) + 2000,
-        active_time: `${Math.floor(Math.random() * 10) + 5}h`,
-        usage_by_language: {
-          JavaScript: 45,
-          Python: 30,
-          TypeScript: 15,
-          Java: 10,
-        },
-        daily_usage: Array.from({ length: 7 }, (_, i) => ({
-          date: new Date(Date.now() - (6 - i) * 24 * 60 * 60 * 1000)
-            .toISOString()
-            .split("T")[0],
-          suggestions: Math.floor(Math.random() * 100) + 50,
-          acceptance_rate: Math.floor(Math.random() * 20) + 70,
-        })),
-      };
-      res.json(mockData);
-    }
-  } catch (error) {
-    res.status(401).json({ error: "Failed to fetch Copilot data" });
+  if (!username) {
+    return res.status(400).json({ error: "No username provided" });
   }
+
+  // Since the GitHub API does not have a specific endpoint for Copilot usage data,
+  // we will always return mock data for demonstration purposes.
+  console.log("Returning mock Copilot data");
+  const mockData = {
+    total_suggestions: Math.floor(Math.random() * 1000) + 500,
+    acceptance_rate: Math.floor(Math.random() * 20) + 70,
+    lines_saved: Math.floor(Math.random() * 5000) + 2000,
+    active_time: `${Math.floor(Math.random() * 10) + 5}h`,
+    usage_by_language: {
+      JavaScript: 45,
+      Python: 30,
+      TypeScript: 15,
+      Java: 10,
+    },
+    daily_usage: Array.from({ length: 7 }, (_, i) => ({
+      date: new Date(Date.now() - (6 - i) * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .split("T")[0],
+      suggestions: Math.floor(Math.random() * 100) + 50,
+      acceptance_rate: Math.floor(Math.random() * 20) + 70,
+    })),
+  };
+  res.json(mockData);
 });
 
 const PORT = process.env.PORT || 3000;
