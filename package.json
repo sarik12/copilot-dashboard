@@ -17,9 +17,11 @@
   },
   "dependencies": {
     "@octokit/auth-oauth-app": "^8.1.1",
+    "lucide-react": "^0.454.0",
     "octokit": "^4.0.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^6.27.0"
+    "react-router-dom": "^6.27.0",
+    "recharts": "^2.13.3"
   }
 }
