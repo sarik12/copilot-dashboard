@@ -1,12 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-  PieChart, Pie, Cell, BarChart, Bar, Legend 
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, BarChart, Bar, Legend
 } from 'recharts';
-import { 
+import {
   MessageSquare, Code2, Clock, GitPullRequest, Github, Users,
-  Calendar, Filter, Download, Search, ChevronDown, ChevronUp 
+  Calendar, Filter, Download, Search, ChevronDown, ChevronUp
 } from 'lucide-react';
+import {
+  TeamActivityChart,
+  UserComparisonChart,
+  TeamPerformanceChart,
+  ActivityHeatmap,
+  LanguageTrendsChart
+} from './components/OrganizationVisuals';
+import { TeamManagement } from './components/TeamManagement';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs"
 
 const GITHUB_CLIENT_ID = 'Ov23li78WLoahHs6bmLU'; // Replace with your client ID
 const BACKEND_URL = 'http://localhost:3000'; // Add /api to make it clear this is the API server
@@ -43,13 +52,16 @@ function App() {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: 'total_suggestions', direction: 'desc' });
   const [filteredLanguage, setFilteredLanguage] = useState('all');
+  const [selectedTab, setSelectedTab] = useState('overview');
+  const [teams, setTeams] = useState([]);
+  const [selectedUsers, setSelectedUsers] = useState([]);
 
   // Initial data fetch
   useEffect(() => {
     const token = localStorage.getItem('github_token');
     if (token) {
       setIsLoggedIn(true);
-      fetchAllData();
+      fetchAllData(token);
     } else {
       setLoading(false);
     }
@@ -61,85 +73,67 @@ function App() {
     }
   }, []);
 
- // Update the fetchAllData function
-const fetchAllData = async () => {
-  try {
-    setLoading(true);
-    const token = localStorage.getItem('github_token');
-    if (!token) {
-      console.error("Error: No token found in localStorage");
-      return;
-    }
+  const fetchAllData = async (token) => {
+    try {
+      // Fetch user data
+      const userResponse = await fetch(`${BACKEND_URL}/api/github/user`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const userData = await userResponse.json();
+      setUserData(userData);
+      console.log('User Data:', userData);
 
-    // Fetch user data
-    const userResponse = await fetch(`${BACKEND_URL}/api/github/user`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!userResponse.ok) {
-      const errorData = await userResponse.json();
-      throw new Error(`Error fetching user data: ${userResponse.status} - ${JSON.stringify(errorData)}`);
-    }
-    const userData = await userResponse.json();
-    setUserData(userData);
+      // Fetch organization data
+      const orgResponse = await fetch(`${BACKEND_URL}/api/github/orgs`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const orgData = await orgResponse.json();
+      setOrgData(orgData);
+      console.log('Organization Data:', orgData);
 
-    // Fetch organizations
-    const orgsResponse = await fetch(`${BACKEND_URL}/api/github/orgs`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!orgsResponse.ok) {
-      const errorData = await orgsResponse.json();
-      throw new Error(`Error fetching organizations: ${orgsResponse.status} - ${JSON.stringify(errorData)}`);
-    }
-    const orgsData = await orgsResponse.json();
-
-    // Fetch org data if available
-    if (orgsData && orgsData.length > 0) {
-      const orgName = orgsData[0].login;
-      const orgDataResponse = await fetch(
-        `${BACKEND_URL}/api/github/copilot/org/${orgName}/members?dateRange=${dateRange}&language=${filteredLanguage}`,
-        {
+      // Fetch Copilot data
+      const username = userData.login;
+      if (username) {
+        const copilotResponse = await fetch(`${BACKEND_URL}/api/github/copilot/user/${username}`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
-        }
-      );
-      if (!orgDataResponse.ok) {
-        const errorData = await orgDataResponse.json();
-        throw new Error(`Error fetching org data: ${orgDataResponse.status} - ${JSON.stringify(errorData)}`);
+        });
+        const copilotData = await copilotResponse.json();
+        setCopilotData(copilotData);
+        console.log('Copilot Data:', copilotData);
+      } else {
+        console.error('Username is undefined');
       }
-      const orgDetailData = await orgDataResponse.json();
-      setOrgData(orgDetailData);
-    }
 
-    // Fetch individual Copilot data
-    if (userData.login) {
-      const copilotResponse = await fetch(
-        `${BACKEND_URL}/api/github/copilot/user/${userData.login}`,
-        {
+      // Fetch organization members' usage data
+      if (orgData.length > 0) {
+        const orgMembersResponse = await fetch(`${BACKEND_URL}/api/github/copilot/org/${orgData[0].login}/members`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
-        }
-      );
-      if (!copilotResponse.ok) {
-        const errorData = await copilotResponse.json();
-        throw new Error(`Error fetching copilot data: ${copilotResponse.status} - ${JSON.stringify(errorData)}`);
+        });
+        const orgMembersData = await orgMembersResponse.json();
+        setOrgData((prevOrgData) => ({
+          ...prevOrgData,
+          memberUsage: orgMembersData,
+        }));
+        console.log('Organization Members Data:', orgMembersData);
+      } else {
+        console.error('Organization login is undefined');
       }
-      const copilotData = await copilotResponse.json();
-      setCopilotData(copilotData);
-    }
-  } catch (error) {
-    console.error("Error fetching data:", error);
-  } finally {
-    setLoading(false);
-  }
-};
 
-  // Auth handlers
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleLogin = () => {
     const scopes = [
       'read:org',
@@ -148,40 +142,31 @@ const fetchAllData = async () => {
       'read:user',
       'repo'
     ].join(' ');
-  
-    const redirectUri = `${FRONTEND_URL}`;
-    window.location.href = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&redirect_uri=${redirectUri}&scope=${scopes}`;
+
+    window.location.href = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&scope=${scopes}`;
   };
 
- // Update handleOAuthCode
-const handleOAuthCode = async (code) => {
-  try {
-    const response = await fetch(`${BACKEND_URL}/api/auth/github/callback`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ code }),
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(`OAuth error: ${response.status} - ${JSON.stringify(errorData)}`);
+  const handleOAuthCode = async (code) => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/auth/github/callback`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ code }),
+      });
+      
+      const data = await response.json();
+      
+      if (data.access_token) {
+        localStorage.setItem('github_token', data.access_token);
+        setIsLoggedIn(true);
+        fetchAllData(data.access_token);
+      }
+    } catch (error) {
+      console.error('Error handling OAuth code:', error);
     }
-    
-    const data = await response.json();
-    
-    if (data.access_token) {
-      localStorage.setItem('github_token', data.access_token);
-      setIsLoggedIn(true);
-      await fetchAllData();
-    } else {
-      throw new Error('No access token in response');
-    }
-  } catch (error) {
-    console.error('Error handling OAuth code:', error);
-  }
-};
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('github_token');
@@ -191,50 +176,6 @@ const handleOAuthCode = async (code) => {
     setOrgData(null);
   };
 
-  // Sorting and filtering helpers
-  const handleSort = (key) => {
-    setSortConfig({
-      key,
-      direction: sortConfig.key === key && sortConfig.direction === 'asc' ? 'desc' : 'asc'
-    });
-  };
-
-  const sortedMembers = orgData?.memberUsage ? [...orgData.memberUsage].sort((a, b) => {
-    const aValue = a.usage?.[sortConfig.key] || 0;
-    const bValue = b.usage?.[sortConfig.key] || 0;
-    return sortConfig.direction === 'asc' ? aValue - bValue : bValue - aValue;
-  }) : [];
-
-  const filteredMembers = sortedMembers.filter(member => 
-    member.user.login.toLowerCase().includes(searchTerm.toLowerCase()) &&
-    (filteredLanguage === 'all' || 
-     member.usage?.languages?.[filteredLanguage])
-  );
-
-  // Export functionality
-  const exportData = () => {
-    const csvData = [
-      ['Username', 'Suggestions', 'Acceptance Rate', 'Lines Saved', 'Repositories', 'Last Active'],
-      ...filteredMembers.map(member => [
-        member.user.login,
-        member.usage?.total_suggestions || 0,
-        member.usage?.acceptance_rate || 0,
-        member.usage?.lines_saved || 0,
-        member.usage?.repositories || 0,
-        member.usage?.last_active || ''
-      ])
-    ].map(row => row.join(',')).join('\n');
-
-    const blob = new Blob([csvData], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `copilot-stats-${new Date().toISOString()}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  };
-  // Loading and login states
   if (loading) {
     return <div className="flex items-center justify-center h-screen">Loading...</div>;
   }
@@ -258,7 +199,6 @@ const handleOAuthCode = async (code) => {
 
   return (
     <div className="p-6 max-w-7xl mx-auto bg-gray-50 min-h-screen">
-      {/* Header */}
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-3xl font-bold mb-2">GitHub Copilot Dashboard</h1>
@@ -269,90 +209,34 @@ const handleOAuthCode = async (code) => {
             </div>
           )}
         </div>
-        <div className="flex items-center gap-4">
-          <button
-            onClick={exportData}
-            className="flex items-center gap-2 px-4 py-2 bg-white border rounded-lg hover:bg-gray-50"
-          >
-            <Download className="h-4 w-4" />
-            Export Data
-          </button>
-          <button
-            onClick={handleLogout}
-            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
-          >
-            Logout
-          </button>
-        </div>
+        <button
+          onClick={handleLogout}
+          className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+        >
+          Logout
+        </button>
       </div>
 
-      {/* Filters and Controls */}
-      <div className="bg-white p-4 rounded-lg shadow-md mb-8">
-        <div className="flex flex-wrap gap-4 items-center justify-between">
-          <div className="flex items-center gap-4">
-            <select
-              value={dateRange}
-              onChange={(e) => setDateRange(e.target.value)}
-              className="border rounded-md px-3 py-2"
-            >
-              <option value="7d">Last 7 days</option>
-              <option value="30d">Last 30 days</option>
-              <option value="90d">Last 90 days</option>
-              <option value="1y">Last year</option>
-            </select>
-
-            <select
-              value={filteredLanguage}
-              onChange={(e) => setFilteredLanguage(e.target.value)}
-              className="border rounded-md px-3 py-2"
-            >
-              <option value="all">All Languages</option>
-              {orgData?.organizationUsage?.languages && 
-                Object.keys(orgData.organizationUsage.languages).map(lang => (
-                  <option key={lang} value={lang}>{lang}</option>
-                ))
-              }
-            </select>
-          </div>
-
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search members..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 pr-4 py-2 border rounded-md"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Individual Stats */}
       {copilotData && (
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold mb-6">Personal Usage</h2>
+        <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
             <StatCard
               title="Suggestions"
-              value={copilotData.total_suggestions?.toLocaleString() || '0'}
+              value={copilotData.total_suggestions || '0'}
               icon={MessageSquare}
               description="Total code suggestions"
-              trend={copilotData.trending_metrics?.suggestions_trend}
             />
             <StatCard
               title="Acceptance Rate"
               value={`${copilotData.acceptance_rate || '0'}%`}
               icon={GitPullRequest}
               description="Suggestion acceptance rate"
-              trend={copilotData.trending_metrics?.acceptance_trend}
             />
             <StatCard
               title="Lines Saved"
-              value={copilotData.lines_saved?.toLocaleString() || '0'}
+              value={copilotData.lines_saved || '0'}
               icon={Code2}
               description="Total lines of code saved"
-              trend={copilotData.trending_metrics?.lines_trend}
             />
             <StatCard
               title="Active Time"
@@ -361,54 +245,17 @@ const handleOAuthCode = async (code) => {
               description="Time spent with Copilot"
             />
           </div>
-        </div>
-      )}
 
-      {/* Organization Stats */}
-      {orgData && (
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold mb-6">Organization Overview</h2>
-          
-          {/* Organization Summary */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-            <StatCard
-              title="Active Seats"
-              value={`${orgData.seats?.used_seats || 0} / ${orgData.seats?.total_seats || 0}`}
-              icon={Users}
-              description="Used vs Total seats"
-            />
-            <StatCard
-              title="Total Suggestions"
-              value={orgData.organizationUsage?.total_suggestions?.toLocaleString() || '0'}
-              icon={MessageSquare}
-              description="Organization-wide suggestions"
-            />
-            <StatCard
-              title="Avg. Acceptance"
-              value={`${orgData.organizationUsage?.acceptance_rate?.toFixed(1) || '0'}%`}
-              icon={GitPullRequest}
-              description="Average acceptance rate"
-            />
-            <StatCard
-              title="Total Impact"
-              value={orgData.organizationUsage?.lines_saved?.toLocaleString() || '0'}
-              icon={Code2}
-              description="Total lines of code saved"
-            />
-          </div>
-
-          {/* Charts */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            {/* Language Distribution */}
-            <div className="bg-white p-6 rounded-lg shadow-md">
-              <h3 className="text-xl font-bold mb-4">Language Distribution</h3>
+          {copilotData.usage_by_language && (
+            <div className="bg-white p-6 rounded-lg shadow-md mb-8">
+              <h2 className="text-xl font-bold mb-4">Language Distribution</h2>
               <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
-                      data={Object.entries(orgData.organizationUsage?.languages || {}).map(([name, value]) => ({
-                        name,
-                        value
+                      data={Object.entries(copilotData.usage_by_language).map(([language, value]) => ({
+                        name: language,
+                        value: value
                       }))}
                       dataKey="value"
                       nameKey="name"
@@ -417,119 +264,141 @@ const handleOAuthCode = async (code) => {
                       outerRadius={100}
                       label
                     >
-                      {Object.entries(orgData.organizationUsage?.languages || {}).map((entry, index) => (
+                      {Object.entries(copilotData.usage_by_language).map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>
                     <Tooltip />
-                    <Legend />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
             </div>
+          )}
 
-            {/* Top Contributors */}
+          {copilotData.daily_usage && (
             <div className="bg-white p-6 rounded-lg shadow-md">
-              <h3 className="text-xl font-bold mb-4">Top Contributors</h3>
-              <div className="h-[300px]">
+              <h2 className="text-xl font-bold mb-4">Daily Usage</h2>
+              <div className="h-[400px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={filteredMembers.slice(0, 5)}>
+                  <LineChart data={copilotData.daily_usage}>
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="user.login" />
+                    <XAxis dataKey="date" />
                     <YAxis />
                     <Tooltip />
-                    <Legend />
-                    <Bar 
-                      dataKey="usage.total_suggestions" 
-                      name="Suggestions" 
-                      fill="#8884d8" 
+                    <Line
+                      type="monotone"
+                      dataKey="suggestions"
+                      name="Suggestions"
+                      stroke="#0088FE"
+                      strokeWidth={2}
                     />
-                    <Bar 
-                      dataKey="usage.lines_saved" 
-                      name="Lines Saved" 
-                      fill="#82ca9d" 
+                    <Line
+                      type="monotone"
+                      dataKey="acceptance_rate"
+                      name="Acceptance Rate"
+                      stroke="#00C49F"
+                      strokeWidth={2}
                     />
-                  </BarChart>
+                  </LineChart>
                 </ResponsiveContainer>
               </div>
             </div>
+          )}
+        </>
+      )}
+
+      {orgData && (
+        <>
+          <h2 className="text-2xl font-bold mb-6">Organization Copilot Usage</h2>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            <div className="bg-white p-6 rounded-lg shadow">
+              <h3 className="text-lg font-semibold mb-2">Active Seats</h3>
+              <div className="text-3xl font-bold">{orgData.seats?.total_seats || 'N/A'}</div>
+              <p className="text-sm text-gray-500">Used: {orgData.seats?.used_seats || 'N/A'}</p>
+            </div>
+            
+            <div className="bg-white p-6 rounded-lg shadow">
+              <h3 className="text-lg font-semibold mb-2">Total Usage</h3>
+              <div className="text-3xl font-bold">
+                {orgData.organizationUsage?.total_suggestions || 'N/A'} suggestions
+              </div>
+              <p className="text-sm text-gray-500">
+                Acceptance rate: {orgData.organizationUsage?.acceptance_rate || 'N/A'}%
+              </p>
+            </div>
+            
+            <div className="bg-white p-6 rounded-lg shadow">
+              <h3 className="text-lg font-semibold mb-2">Active Users</h3>
+              <div className="text-3xl font-bold">
+                {orgData.memberUsage?.filter(m => m.usage).length || 'N/A'}
+              </div>
+              <p className="text-sm text-gray-500">
+                Total members: {orgData.memberUsage?.length || 'N/A'}
+              </p>
+            </div>
           </div>
 
-          {/* Member Table */}
-          <div className="bg-white rounded-lg shadow-md overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-xl font-bold">Member Activity Details</h3>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full">
-                <thead className="bg-gray-50">
-                  <tr>
-                    {[
-                      { key: 'user', label: 'User' },
-                      { key: 'total_suggestions', label: 'Suggestions' },
-                      { key: 'acceptance_rate', label: 'Acceptance Rate' },
-                      { key: 'lines_saved', label: 'Lines Saved' },
-                      { key: 'repositories', label: 'Repositories' },
-                      { key: 'last_active', label: 'Last Active' }
-                    ].map(({ key, label }) => (
-                      <th
-                        key={key}
-                        onClick={() => handleSort(key)}
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                      >
-                        <div className="flex items-center gap-2">
-                          {label}
-                          {sortConfig.key === key && (
-                            sortConfig.direction === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                          )}
-                        </div>
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredMembers.map((member, index) => (
-                    <tr key={index} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <img 
-                            className="h-8 w-8 rounded-full" 
-                            src={member.user.avatar_url} 
-                            alt="" 
-                          />
-                          <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-900">
-                              {member.user.login}
-                            </div>
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            <table className="min-w-full">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    User
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Suggestions
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Acceptance Rate
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Lines Saved
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Last Active
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {orgData.memberUsage?.map((member, index) => (
+                  <tr key={index}>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <img 
+                          className="h-8 w-8 rounded-full" 
+                          src={member.user.avatar_url} 
+                          alt="" 
+                        />
+                        <div className="ml-4">
+                          <div className="text-sm font-medium text-gray-900">
+                            {member.user.login}
                           </div>
                         </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {member.usage?.total_suggestions?.toLocaleString() || 'N/A'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {member.usage?.acceptance_rate ? 
-                          `${member.usage.acceptance_rate.toFixed(1)}%` : 
-                          'N/A'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {member.usage?.lines_saved?.toLocaleString() || 'N/A'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {member.usage?.repositories || 'N/A'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {member.usage?.last_active ? 
-                          new Date(member.usage.last_active).toLocaleDateString() : 
-                          'N/A'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {member.usage?.total_suggestions || 'N/A'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {member.usage?.acceptance_rate ? 
+                        `${member.usage.acceptance_rate}%` : 
+                        'N/A'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {member.usage?.lines_saved || 'N/A'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {member.usage?.last_active ? 
+                        new Date(member.usage.last_active).toLocaleDateString() : 
+                        'N/A'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        </div>
+        </>
       )}
     </div>
   );
