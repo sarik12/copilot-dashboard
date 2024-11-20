@@ -3,7 +3,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { MessageSquare, Code2, Clock, GitPullRequest, Github, Users } from 'lucide-react';
 
 const GITHUB_CLIENT_ID = 'Ov23li78WLoahHs6bmLU'; // Replace with your client ID
-const BACKEND_URL = 'http://localhost:3000';
+const BACKEND_URL = 'http://localhost:3001';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
 

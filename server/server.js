@@ -153,7 +153,7 @@ app.get("/api/github/copilot/user/:username", async (req, res) => {
   res.json(mockData);
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });

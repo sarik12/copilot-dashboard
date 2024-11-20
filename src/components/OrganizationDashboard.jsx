@@ -16,7 +16,7 @@ const OrganizationDashboard = () => {
       const token = localStorage.getItem('github_token');
       const orgName = 'your-org-name'; // Replace with your organization name
       
-      const response = await fetch(`http://localhost:3000/api/github/copilot/org/${orgName}`, {
+      const response = await fetch(`http://localhost:3001/api/github/copilot/org/${orgName}`, {
         headers: {
           Authorization: `Bearer ${token}`
         }
